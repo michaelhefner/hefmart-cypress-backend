@@ -14,8 +14,23 @@ app.post('/', (req, res) => {
 app.get('/run-tests', async (req, res) => { 
   console.log(req);
     try {
-        await cypress.run()
-        res.send('Tests run successfully!')
+        const response = await cypress.run({
+          spec: 'cypress/e2e/spec.cy.js',
+          browser: 'chrome',
+          headless: true,
+          video: true,
+      
+          setupNodeEvents(on, config) {
+            on('after:spec', (spec, results) => {
+              if (results.video) {
+                console.log('Video:', results)
+                const timestamp = Date.now()
+                fs.renameSync(results.video, `assets/videos/${results.spec.fileName}-${timestamp}.mp4`)
+              }
+            })
+          },
+        }).then((results) => results.runs[0]).catch((error) => error);
+        res.json(response);
     } catch (error) {
         console.error(error)
         res.status(500).send('Tests failed!')
