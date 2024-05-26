@@ -1,17 +1,45 @@
+const { auth } = require('express-openid-connect');
 const express = require('express')
 const app = express()
-const port = 3000
+const port = 9001
 const cypress = require('cypress')
+const { requiresAuth } = require('express-openid-connect');
 
+require('dotenv').config()
+const config = {
+  authRequired: false,
+  auth0Logout: true,
+  secret: process.env.SECRET,
+  baseURL: process.env.BASE_URL,
+  clientID: process.env.CLIENT_ID,
+  issuerBaseURL: process.env.ISSUER_BASE_URL
+};
+
+// auth router attaches /login, /logout, and /callback routes to the baseURL
+app.use(auth(config));
+
+app.get('/profile', requiresAuth(), (req, res) => {
+  res.send(JSON.stringify(req.oidc.user));
+});
+
+// req.isAuthenticated is provided from the auth router
 app.get('/', (req, res) => {
-  res.send('Hefmart API is running!')
+  console.log(req.oidc.isAuthenticated());
+  res.send(req.oidc.isAuthenticated() ? 'Logged in' : 'Logged out');
+});
+app.post('/token-check', async (req, res) => {
+  console.log(req.body);
+   let accessToken = req.body.token;
+   if (accessToken.isExpired()) {
+     accessToken = await accessToken.refresh();
+   }
 });
 app.post('/', (req, res) => {
-  console.log(req);
+  console.log(req.body);
   res.send('Hefmart API is running!')
 });
 
-app.get('/run-tests', async (req, res) => { 
+app.get('/run-tests', requiresAuth(), async (req, res) => { 
   console.log(req);
     try {
         const response = await cypress.run({
@@ -20,7 +48,7 @@ app.get('/run-tests', async (req, res) => {
           headless: true,
           video: true,
       
-          setupNodeEvents(on, config) {
+          setupNodeEvents(on) {
             on('after:spec', (spec, results) => {
               if (results.video) {
                 console.log('Video:', results)
